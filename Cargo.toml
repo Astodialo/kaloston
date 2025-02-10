@@ -1,0 +1,10 @@
+[package]
+name = "kaloston"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+kalosm = { git = "https://github.com/floneum/floneum", version = "0.3.2", features = ["full"] }
+surrealdb = { version = "2.1.4", features = ["kv-surrealkv"] }
+tokio = { version = "1.43.0", features = ["full"] }
