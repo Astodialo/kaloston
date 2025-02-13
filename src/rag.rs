@@ -23,7 +23,8 @@ pub async fn rag() -> Result<DocumentTable<Db>> {
     // Create a chunker splits the document into chunks to be embedded
     let chunker = SemanticChunker::new()
         .with_target_score(0.65)
-        .with_small_chunk_exponent(0.);
+        .with_small_chunk_merge_bonus(20.)
+        .with_small_chunk_exponent(0.5);
 
     //let url = "https://slatestarcodex.com/2014/07/30/meditations-on-moloch/";
     //let document = Url::parse(&url).unwrap().into_document().await?;
@@ -51,7 +52,7 @@ pub async fn rag() -> Result<DocumentTable<Db>> {
     // If the database is new, add documents to it
     if !exists {
         std::fs::create_dir_all("documents")?;
-        let context = ["https://slatestarcodex.com/2014/07/30/meditations-on-moloch/"]
+        let context = ["https://theanarchistlibrary.org/library/terra-brix-anarchotranshumanism-this-machine-kills-ability"]
             .iter()
             .map(|url| Url::parse(url).unwrap());
 
