@@ -4,10 +4,10 @@ use color_eyre::{owo_colors::OwoColorize, Result};
 use kalosm::language::*;
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
-    layout::{Constraint, Layout, Position},
+    layout::{Alignment, Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, List, ListItem, Paragraph},
+    widgets::{Block, List, ListItem, Paragraph, Widget, Wrap},
     DefaultTerminal, Frame,
 };
 
@@ -23,7 +23,9 @@ pub struct App {
     /// Current input mode
     input_mode: InputMode,
     /// History of recorded messages
-    messages: Vec<String>,
+    messages: Vec<(Role, String)>,
+    /// Number of messages
+    msg_num: i32,
 }
 
 pub enum InputMode {
@@ -31,14 +33,20 @@ pub enum InputMode {
     Editing,
 }
 
+pub enum Role {
+    AI,
+    Human,
+}
+
 impl App {
     pub async fn new() -> Self {
         Self {
             agent: Agent::new().await,
             input: String::new(),
+            character_index: 0,
             input_mode: InputMode::Normal,
             messages: Vec::new(),
-            character_index: 0,
+            msg_num: 0,
         }
     }
 
@@ -101,12 +109,14 @@ impl App {
     }
 
     pub async fn submit_message(&mut self) {
-        self.messages.push(format!("> {}", self.input.clone()));
+        self.messages
+            .push((Role::Human, format!("> {}", self.input.clone())));
         let mut chat = self.agent.run().await.unwrap();
 
         let stream = chat(&self.input).await.unwrap();
 
-        self.messages.push(stream);
+        self.messages.push((Role::AI, stream));
+        self.msg_num = self.messages.len() as i32;
 
         self.input.clear();
         self.reset_cursor().await;
@@ -148,6 +158,7 @@ impl App {
         frame.render_widget(help_message, help_area);
 
         let input = Paragraph::new(self.input.as_str())
+            .wrap(Wrap { trim: true })
             .style(match self.input_mode {
                 InputMode::Normal => Style::default().fg(Color::Red),
                 InputMode::Editing => Style::default().fg(Color::Green),
@@ -170,17 +181,48 @@ impl App {
             )),
         }
 
-        let messages: Vec<ListItem> = self
+        let messages: Vec<Paragraph> = self
             .messages
             .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                let content = Line::from(Span::raw(format!("{i}: {m}")));
-                ListItem::new(content)
+            .map(|m| {
+                Paragraph::new(m.1.clone())
+                    .wrap(Wrap { trim: true })
+                    .alignment(match m.0 {
+                        Role::AI => Alignment::Left,
+                        Role::Human => Alignment::Right,
+                    })
+                    .block(
+                        Block::bordered()
+                            .title_top({
+                                match m.0 {
+                                    Role::AI => "AI",
+                                    Role::Human => "Human",
+                                }
+                            })
+                            .title_alignment(Alignment::Center),
+                    )
             })
             .collect();
-        let messages = List::new(messages).block(Block::bordered().title("Messages"));
-        frame.render_widget(messages, messages_area);
+
+        let msg_block = Block::bordered().title("Messages");
+        let msg_area = msg_block.inner(messages_area);
+
+        frame.render_widget(Block::bordered().title("Messages"), messages_area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+            ])
+            .split(msg_area);
+
+        for (i, msg) in messages.iter().enumerate() {
+            frame.render_widget(msg, layout[i]);
+        }
     }
 
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
